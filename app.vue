@@ -88,7 +88,7 @@ if (typeof document !== 'undefined') {
   <ul>
     <li v-for="d in devicesList">
       {{ d.label }} ({{ d.deviceId }}) 
-      <button v-if="d.kind==='videoinput'" @click="useDevice(d.deviceId)">use</button>
+      <button v-if="d.kind==='videoinput'" @click="useDevice(d.deviceId)">use this source</button>
       <span v-if="d.kind!=='videoinput'">[{{ d.kind }}]</span>
     </li>
   </ul>
@@ -98,11 +98,11 @@ if (typeof document !== 'undefined') {
   <hr>
   
   <div>
-    <video ref="videoRef"></video>
+    <video ref="videoRef" playsinline disable-remote-playback disable-picture-in-picture></video>
   </div>
-  <button v-if="videoActive" @click="playVideo">play</button> &nbsp;
-  <button v-if="videoActive" @click="pauseVideo">pause</button> &nbsp;
-  <button v-if="videoActive" @click="grabFrame">grabFrame</button> &nbsp;
+  <button v-if="videoActive" @click="playVideo">start video</button> &nbsp;
+  <button v-if="videoActive" @click="pauseVideo">pause video</button> &nbsp;
+  <button v-if="videoActive" @click="grabFrame">grab frame</button> &nbsp;
   <hr>
 
   <div>
@@ -114,5 +114,8 @@ if (typeof document !== 'undefined') {
 <style scoped>
 img {
   width: 200px;
+}
+video {
+  width: 360px;
 }
 </style>
