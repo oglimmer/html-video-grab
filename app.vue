@@ -6,6 +6,7 @@ const devicesList : Ref<MediaDeviceInfo[]> = ref([]);
 const videoRef : Ref<HTMLVideoElement | null> = ref(null);
 const listOfImages : Ref<HTMLImageElement[]> = ref([]);
 const videoActive = ref(false);
+const aliveStatus = ref(false);
 
 const stopStream = (stream: MediaStream) => {
   videoActive.value = false;
@@ -42,27 +43,46 @@ const useDevice = async (deviceId: string) => {
   videoActive.value = true;
 }
 
+let interval : any = null;
 const playVideo = async () => {
   videoRef.value?.play();
+  interval = setInterval(check, 250);
 }
 
 const pauseVideo = async () => {
   videoRef.value?.pause();
+  aliveStatus.value = false;
+  if (interval) {
+    clearInterval(interval);
+  }
+}
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  const numberArray = Array.from(new Uint8Array(buffer));
+  // String.fromCharCode.apply(null, numberArray); // this is limited to 2^16 - 1 bytes (see mdn docs)
+  let stringData = '';
+  for(var i = 0; i < Math.ceil(numberArray.length / 65536.0); i++) {
+    stringData += String.fromCharCode.apply(null, numberArray.slice(i * 65536, Math.min((i+1) * 65536, numberArray.length)))
+  }
+  return btoa(stringData);
 }
 
 const grabFrame = async () => {
-  if (typeof document !== 'undefined') {
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.value!.videoWidth;
-    canvas.height = videoRef.value!.videoHeight;
-    canvas.getContext('2d')!.drawImage(videoRef.value!, 0, 0);
-    const data = canvas.toDataURL('image/png');
-    const image = new Image();
-    image.src = data;
-    if (listOfImages.value.length > 2) {
-      listOfImages.value.shift();
+  if (videoRef.value) {
+    const canvas = new OffscreenCanvas(videoRef.value.videoWidth, videoRef.value.videoHeight);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(videoRef.value, 0, 0);
+      const data = await canvas.convertToBlob({ type: 'image/png' });    
+      const arrayBuffer = await data.arrayBuffer();
+      const base64String = arrayBufferToBase64(arrayBuffer);
+      const image = new Image();
+      image.src = `data:image/png;base64,${base64String}`;
+      if (listOfImages.value.length > 2) {
+        listOfImages.value.shift();
+      }
+      listOfImages.value.push(image);
     }
-    listOfImages.value.push(image);
   }
 }
 
@@ -75,6 +95,45 @@ const onVisibilityChange = () => {
 }
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', onVisibilityChange);
+}
+
+function equalArrayBuffer(buf1: ArrayBuffer, buf2: ArrayBuffer) {
+  if (buf1.byteLength != buf2.byteLength) {
+    return false;
+  }
+  const dv1 = new Int8Array(buf1);
+  const dv2 = new Int8Array(buf2);
+  for (let i = 0; i != buf1.byteLength; i++) {
+    if (dv1[i] != dv2[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+let lastData = new ArrayBuffer(0);
+const check = async () => {
+  if (videoRef.value) {
+    if (videoRef.value!.srcObject) {
+      // those are not working on iPhone
+      // aliveStatus.value = (<MediaStream>videoRef.value!.srcObject).active; 
+      // aliveStatus.value = (<MediaStream>videoRef.value!.srcObject).getTracks().every((track: any) => track.readyState === 'live');
+
+      const canvas = new OffscreenCanvas(videoRef.value.videoWidth, videoRef.value.videoHeight);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.value, 0, 0);
+        const data = await canvas.convertToBlob({ type: 'image/png' });
+        const arrayBuffer = await data.arrayBuffer();
+        aliveStatus.value = !equalArrayBuffer(arrayBuffer, lastData);
+        lastData = arrayBuffer;
+      }
+    } else {
+      aliveStatus.value = false;
+    }
+  } else {
+    aliveStatus.value = false;
+  }
 }
 
 </script>
@@ -95,6 +154,8 @@ if (typeof document !== 'undefined') {
   <button @click="listDevicesPermission">list devices (with permission)</button> &nbsp;
   <button @click="listDevicesNoPermission">list devices (without permission)</button>
   
+  <hr>
+  Alive: {{ aliveStatus }}
   <hr>
   
   <div>
